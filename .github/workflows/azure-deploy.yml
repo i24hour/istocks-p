@@ -44,26 +44,11 @@ jobs:
           cp -r prisma deploy/
           cp package*.json deploy/
           cp next.config.js deploy/
-          cd deploy && zip -r ../deploy.zip . -x "*.git*"
+          cd deploy && zip -r ../deploy.zip .
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v2
+        uses: azure/webapps-deploy@v3
         with:
           app-name: 'istocks-app'
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: deploy.zip
-
-      - name: Configure App Settings
-        uses: azure/CLI@v1
-        with:
-          azcliversion: 2.53.0
-          inlineScript: |
-            az webapp config appsettings set \
-              --name istocks-app \
-              --resource-group istocks \
-              --settings \
-                DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-                GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
-                NODE_ENV="production" \
-                TZ="Asia/Kolkata" \
-                WEBSITE_NODE_DEFAULT_VERSION="20-lts"
