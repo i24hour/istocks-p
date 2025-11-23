@@ -74,7 +74,7 @@ async function importWiproData() {
 
     for (let i = 0; i < priceData.length; i += batchSize) {
       const batch = priceData.slice(i, i + batchSize)
-      const batchData = batch.map((item, index) => ({
+      const batchData = batch.map((item: any, index: number) => ({
         stockId: wipro.id,
         timestamp: item.timestamp,
         open: item.open,
