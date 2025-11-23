@@ -373,7 +373,7 @@ export async function POST(request: NextRequest) {
 
     // Initialize Gemini with function calling
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3-pro',
+      model: 'gemini-2.5-pro',
       tools: [{
         functionDeclarations: databaseFunctions as any,
       }],

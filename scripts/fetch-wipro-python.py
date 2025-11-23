@@ -9,12 +9,17 @@ import json
 from SmartApi import SmartConnect
 import pyotp
 from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
 
-# Angel One credentials
-API_KEY = "836MHyks"
-CLIENT_ID = "P60613196"
-SECRET_KEY = "1844"
-TOTP_TOKEN = "774ISS7A3URGKAG5MN5H2Z4OVE"
+# Load environment variables
+load_dotenv()
+
+# Angel One credentials from environment variables
+API_KEY = os.getenv("ANGELONE_API_KEY")
+CLIENT_ID = os.getenv("ANGELONE_CLIENT_ID")
+SECRET_KEY = os.getenv("ANGELONE_PASSWORD")
+TOTP_TOKEN = os.getenv("ANGELONE_TOTP_TOKEN")
 
 # URL of Angel One's OpenAPI Scrip Master JSON
 URL = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
