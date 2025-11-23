@@ -26,7 +26,7 @@ export default function StockDetailPage() {
       const response = await fetch(`/api/stocks/${symbol}/data?timeframe=1d`)
       const result = await response.json()
       
-      if (result.success && result.data.latestDayStats) {
+      if (result.success && result.data && result.data.latestDayStats && result.data.stock) {
         const stats = result.data.latestDayStats
         const stockInfo = result.data.stock
         
@@ -42,15 +42,42 @@ export default function StockDetailPage() {
           prevClose: stats.prevClose.toFixed(2),
           volume: (stats.volume / 1000000).toFixed(1) + 'M',
         })
+      } else {
+        // Set default data if API fails
+        setStockData({
+          symbol: symbol,
+          name: symbol,
+          price: '0.00',
+          change: 0,
+          changePercent: 0,
+          high: '0.00',
+          low: '0.00',
+          open: '0.00',
+          prevClose: '0.00',
+          volume: '0M',
+        })
       }
     } catch (error) {
       console.error('Error fetching stock data:', error)
+      // Set default data on error
+      setStockData({
+        symbol: symbol,
+        name: symbol,
+        price: '0.00',
+        change: 0,
+        changePercent: 0,
+        high: '0.00',
+        low: '0.00',
+        open: '0.00',
+        prevClose: '0.00',
+        volume: '0M',
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  if (loading) {
+  if (loading || !stockData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
