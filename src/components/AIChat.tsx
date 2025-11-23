@@ -139,11 +139,19 @@ export default function AIChat({ symbol }: AIChatProps) {
       }
 
       setMessages((prev) => [...prev, assistantMessage])
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Chat error:', error)
+      let errorContent = 'I apologize, but I encountered an error. Please try again later.'
+      
+      // Try to extract more detailed error message
+      if (error.message) {
+        errorContent += `\n\nError: ${error.message}`
+      }
+      
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'I apologize, but I encountered an error. Please try again later.',
+        content: errorContent,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])

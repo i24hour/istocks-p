@@ -20,6 +20,19 @@ export async function POST(
       )
     }
 
+    // Check if Gemini API key is configured
+    if (!process.env.GEMINI_API_KEY) {
+      console.error('❌ GEMINI_API_KEY is not configured')
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'AI service not configured',
+          analysis: 'The AI service is not properly configured. Please contact support.'
+        },
+        { status: 500 }
+      )
+    }
+
     // Find the stock
     const stock = await prisma.stock.findUnique({
       where: { symbol: symbol.toUpperCase() },
@@ -331,11 +344,32 @@ FORBIDDEN - DO NOT USE:
     console.log('📊 Asking Gemini to generate Prisma code...')
     
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-    const result = await model.generateContent(context)
-    const response = await result.response
-    const generatedCode = response.text()
     
-    console.log('✅ Gemini generated code:', generatedCode)
+    let result, response, generatedCode
+    try {
+      // Add timeout for Gemini API call (25 seconds - Vercel has 60s limit)
+      const geminiPromise = model.generateContent(context)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Gemini API timeout after 25 seconds')), 25000)
+      )
+      
+      result = await Promise.race([geminiPromise, timeoutPromise]) as any
+      response = await result.response
+      generatedCode = response.text()
+      
+      console.log('✅ Gemini generated code:', generatedCode)
+    } catch (geminiError: any) {
+      console.error('❌ Gemini API error:', geminiError)
+      return NextResponse.json({
+        success: false,
+        error: 'AI generation failed',
+        analysis: `I apologize, but the AI service failed to generate a query. Error: ${geminiError.message}. Please try again or contact support if this persists.`,
+        debug: {
+          geminiError: geminiError.message,
+          query: query
+        }
+      }, { status: 500 })
+    }
 
     // Extract the code from Gemini's response
     const codeMatch = generatedCode.match(/```typescript\n([\s\S]*?)\n```/)
@@ -361,14 +395,27 @@ FORBIDDEN - DO NOT USE:
         })()
       `)
       
-      queryResult = await executeQuery(prisma)
+      // Add timeout for query execution (20 seconds)
+      const queryPromise = executeQuery(prisma)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database query timeout after 20 seconds')), 20000)
+      )
+      
+      queryResult = await Promise.race([queryPromise, timeoutPromise])
       console.log('✅ Query executed successfully, results:', queryResult)
     } catch (execError: any) {
       console.error('❌ Error executing generated code:', execError)
+      console.error('❌ Error stack:', execError.stack)
+      console.error('❌ Generated code was:', prismaCode)
       return NextResponse.json({
         success: false,
         error: 'Failed to execute query',
-        analysis: `I apologize, but the generated query failed to execute: ${execError.message}`
+        analysis: `I apologize, but the generated query failed to execute: ${execError.message}\n\nError details: ${execError.stack || 'No stack trace'}`,
+        debug: {
+          errorMessage: execError.message,
+          errorStack: execError.stack,
+          generatedCode: prismaCode
+        }
       })
     }
 
@@ -481,14 +528,37 @@ ${prismaCode}
       }
     })
   } catch (error: any) {
-    console.error('Error analyzing stock:', error)
-    console.error('Error details:', error.message, error.stack)
+    console.error('❌ Error analyzing stock:', error)
+    console.error('❌ Error message:', error.message)
+    console.error('❌ Error stack:', error.stack)
+    console.error('❌ Error name:', error.name)
+    
+    // More descriptive error message
+    let errorDescription = error.message || 'Unknown error'
+    if (error.code === 'P2002') {
+      errorDescription = 'Database constraint violation'
+    } else if (error.code?.startsWith('P')) {
+      errorDescription = `Database error: ${error.message}`
+    } else if (error.message?.includes('timeout')) {
+      errorDescription = 'Query timeout - database took too long to respond'
+    } else if (error.message?.includes('ECONNREFUSED')) {
+      errorDescription = 'Cannot connect to database'
+    }
+    
     return NextResponse.json(
       { 
         success: false, 
         error: 'Failed to analyze stock',
-        errorDetails: error.message || 'Unknown error',
-        analysis: 'I apologize, but I encountered an error while analyzing the data. Please try again.'
+        errorDetails: errorDescription,
+        errorType: error.name,
+        errorCode: error.code,
+        analysis: `I apologize, but I encountered an error while analyzing the data. Error: ${errorDescription}. Please check the server logs for more details.`,
+        debug: {
+          message: error.message,
+          name: error.name,
+          code: error.code,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }
       },
       { status: 500 }
     )
