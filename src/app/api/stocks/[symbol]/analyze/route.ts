@@ -343,7 +343,7 @@ FORBIDDEN - DO NOT USE:
     // Call Gemini AI to generate code
     console.log('📊 Asking Gemini to generate Prisma code...')
     
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-pro' })
     
     let result, response, generatedCode
     try {
