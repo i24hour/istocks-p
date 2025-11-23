@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Stock {
+  id          String   @id @default(cuid())
+  symbol      String   @unique
+  name        String
+  exchange    String   @default("NSE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  priceData   StockPrice[]
+  insights    StockInsight[]
+  
+  @@index([symbol])
+}
+
+model StockPrice {
+  id              String   @id @default(cuid())
+  stockId         String
+  stock           Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  
+  timestamp       DateTime
+  open            Float
+  high            Float
+  low             Float
+  close           Float
+  volume          BigInt
+  
+  // Technical Indicators - Trend
+  sma20           Float?
+  sma50           Float?
+  sma200          Float?
+  ema12           Float?
+  ema26           Float?
+  macd            Float?
+  macdSignal      Float?
+  macdHistogram   Float?
+  adx             Float?
+  plusDI          Float?
+  minusDI         Float?
+  
+  // Momentum Indicators
+  rsi             Float?
+  stochK          Float?
+  stochD          Float?
+  cci             Float?
+  williamsR       Float?
+  roc             Float?
+  
+  // Volatility Indicators
+  bbUpper         Float?
+  bbMiddle        Float?
+  bbLower         Float?
+  atr             Float?
+  
+  // Volume Indicators
+  obv             BigInt?
+  vwap            Float?
+  forceIndex      Float?
+  adLine          Float?
+  
+  createdAt       DateTime @default(now())
+  
+  @@unique([stockId, timestamp])
+  @@index([stockId, timestamp(sort: Desc)])
+  @@index([timestamp])
+}
+
+model StockInsight {
+  id              String   @id @default(cuid())
+  stockId         String
+  stock           Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  
+  timeframe       String   // "1d", "1w", "1m", "3m", "1y"
+  
+  trend           String   // "bullish", "bearish", "neutral"
+  trendStrength   Float    // 0-100
+  momentum        String   // "strong_buy", "buy", "neutral", "sell", "strong_sell"
+  volatility      String   // "high", "medium", "low"
+  volumeAnalysis  String   // "increasing", "decreasing", "stable"
+  
+  supportLevel    Float?
+  resistanceLevel Float?
+  
+  summary         String   @db.Text
+  
+  generatedAt     DateTime @default(now())
+  
+  @@unique([stockId, timeframe])
+  @@index([stockId])
+}

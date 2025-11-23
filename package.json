@@ -1,0 +1,45 @@
+{
+  "name": "istocks-platform",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3002",
+    "build": "prisma generate && next build",
+    "start": "next start -p 8080",
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "tsx scripts/populate-wipro-data.ts",
+    "db:import": "tsx scripts/import-wipro-json.ts",
+    "db:export": "tsx scripts/export-database-to-csv.ts",
+    "fetch:python": "python3 scripts/fetch-wipro-python.py"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^5.11.0",
+    "axios": "^1.6.0",
+    "date-fns": "^3.3.1",
+    "dotenv": "^17.2.3",
+    "hi-base32": "^0.5.1",
+    "lucide-react": "^0.344.0",
+    "next": "^14.2.0",
+    "node-cron": "^3.0.3",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "recharts": "^2.12.0",
+    "tailwindcss": "^3.4.0",
+    "technicalindicators": "^3.1.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^18.2.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "prisma": "^5.11.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.3.0"
+  }
+}
