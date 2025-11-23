@@ -13,6 +13,7 @@ This guide will help you set up automated deployment to Azure using GitHub Actio
 You need to add 3 secrets to your GitHub repository:
 
 ### 1. Go to GitHub Repository Settings
+
 - Navigate to: https://github.com/i24hour/istocks-p/settings/secrets/actions
 - Click **"New repository secret"**
 
@@ -34,6 +35,7 @@ Copy everything including `<publishData>` tags and paste into GitHub secret.
 **Name:** `DATABASE_URL`
 
 **Value:**
+
 ```
 postgresql://istocks:<YOUR_PASSWORD>@istocks.postgres.database.azure.com:5432/stock_analysis?sslmode=require
 ```
@@ -45,6 +47,7 @@ Replace `<YOUR_PASSWORD>` with your actual Azure PostgreSQL password.
 **Name:** `GEMINI_API_KEY`
 
 **Value:**
+
 ```
 AIzaSyAu59eg_Nha_JZPrPfnSyoXTwanOtnIP-0
 ```
@@ -62,6 +65,7 @@ git push origin main
 ```
 
 The GitHub Action will automatically:
+
 1. ✅ Install dependencies
 2. ✅ Generate Prisma client
 3. ✅ Build Next.js app
@@ -96,21 +100,25 @@ az postgres flexible-server firewall-rule create \
 ## 🎯 Quick Commands
 
 ### View Publish Profile
+
 ```bash
 cat azure-publish-profile.xml
 ```
 
 ### Check App Status
+
 ```bash
 az webapp show --name istocks-app --resource-group istocks --query state -o tsv
 ```
 
 ### View App Logs
+
 ```bash
 az webapp log tail --name istocks-app --resource-group istocks
 ```
 
 ### Restart App
+
 ```bash
 az webapp restart --name istocks-app --resource-group istocks
 ```
@@ -120,6 +128,7 @@ az webapp restart --name istocks-app --resource-group istocks
 ## 🔄 Future Deployments
 
 Every time you push to the `main` branch, GitHub Actions will automatically:
+
 - Build your app
 - Deploy to Azure
 - Update environment variables

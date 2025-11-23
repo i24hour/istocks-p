@@ -1,6 +1,7 @@
 # Azure Deployment Guide for iStocks
 
 ## Prerequisites
+
 1. ✅ Azure CLI installed (`az --version` to check)
 2. ✅ Docker installed and running
 3. ✅ Azure database password ready
@@ -17,6 +18,7 @@ chmod +x deploy-azure.sh
 ```
 
 The script will:
+
 - Create Azure Container Registry
 - Build and push Docker image
 - Deploy to Azure Container Apps
@@ -25,12 +27,14 @@ The script will:
 ## Manual Deployment Steps
 
 ### Step 1: Login to Azure
+
 ```bash
 az login
 az account set --subscription "ae7ed4aa-e56d-4f03-a993-3862666c22a0"
 ```
 
 ### Step 2: Create Container Registry
+
 ```bash
 az acr create \
   --resource-group istocks \
@@ -41,6 +45,7 @@ az acr create \
 ```
 
 ### Step 3: Build and Push Image
+
 ```bash
 # Login to ACR
 az acr login --name istocksacr
@@ -56,6 +61,7 @@ docker push istocksacr.azurecr.io/istocks:latest
 ```
 
 ### Step 4: Create Container Apps Environment
+
 ```bash
 az containerapp env create \
   --name istocks-env \
@@ -64,6 +70,7 @@ az containerapp env create \
 ```
 
 ### Step 5: Deploy Container App
+
 ```bash
 # Get ACR credentials
 ACR_USERNAME=$(az acr credential show --name istocksacr --query username -o tsv)
@@ -92,9 +99,11 @@ az containerapp create \
 ```
 
 **Replace:**
+
 - `YOUR_PASSWORD` with your Azure PostgreSQL password
 
 ### Step 6: Get App URL
+
 ```bash
 az containerapp show \
   --name istocks-app \
@@ -105,11 +114,13 @@ az containerapp show \
 ## Database Configuration
 
 ### Allow Azure Services
+
 1. Go to Azure Portal → PostgreSQL server → Networking
 2. Enable "Allow public access from any Azure service"
 3. Add your IP address if testing locally
 
 ### Create Database (if needed)
+
 ```bash
 # Connect to your Azure database
 psql "host=istocks.postgres.database.azure.com port=5432 dbname=postgres user=istocks sslmode=require"
@@ -124,6 +135,7 @@ npx prisma db push
 ## Monitoring & Logs
 
 ### View Logs
+
 ```bash
 az containerapp logs show \
   --name istocks-app \
@@ -132,6 +144,7 @@ az containerapp logs show \
 ```
 
 ### Check App Status
+
 ```bash
 az containerapp show \
   --name istocks-app \
@@ -139,6 +152,7 @@ az containerapp show \
 ```
 
 ### Update App (after code changes)
+
 ```bash
 # Rebuild and push
 docker build -t istocks:latest .
@@ -155,6 +169,7 @@ az containerapp update \
 ## Troubleshooting
 
 ### Check Container App Health
+
 ```bash
 az containerapp revision list \
   --name istocks-app \
@@ -163,11 +178,13 @@ az containerapp revision list \
 ```
 
 ### Database Connection Issues
+
 1. Check firewall rules in Azure Portal
 2. Verify connection string format
 3. Ensure SSL mode is enabled
 
 ### App Not Starting
+
 ```bash
 # View detailed logs
 az containerapp logs show \
