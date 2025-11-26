@@ -23,6 +23,7 @@ Your database now **automatically updates** with live stock data:
 ## Next Market Run
 
 The auto-fetch will run next on:
+
 - **Tomorrow (Nov 27)** if Wednesday is a trading day
 - **Every 15 min** from 9:00 AM - 3:30 PM
 - Check logs at: `logs/auto-fetch/output.log`
@@ -57,12 +58,14 @@ crontab -l
 ## What You'll See
 
 ### During Market Hours (9:15 AM - 3:30 PM)
+
 ```
 ✅ Fetched 15 records
 ✅ Inserted 15 new records into database
 ```
 
 ### After Hours / Weekends
+
 ```
 ⚠️ No data for [date range]
 ✅ Successfully saved 0 new records
@@ -75,16 +78,19 @@ This is **normal** - market data only available during trading hours!
 ### If data stops updating:
 
 1. **Check cron is running:**
+
    ```bash
    crontab -l | grep iStocks
    ```
 
 2. **Check logs for errors:**
+
    ```bash
    tail -50 logs/auto-fetch/error.log
    ```
 
 3. **Test manually:**
+
    ```bash
    ./scripts/manual-fetch.sh
    ```
@@ -97,12 +103,15 @@ This is **normal** - market data only available during trading hours!
 ### Common Issues
 
 **❌ "No module named 'SmartApi'"**
+
 - Run: `./scripts/install-dependencies.sh`
 
 **❌ "Authentication failed"**
+
 - Check `.env.local` has correct Angel One credentials
 
 **❌ "Database error"**
+
 - Verify `.env.local` DATABASE_URL is correct
 - Test: `./scripts/check-status.sh`
 
@@ -127,6 +136,7 @@ AUTO_FETCH_COMPLETE.md              (This file - summary)
 ## Environment Variables Used
 
 From `.env.local`:
+
 ```bash
 DATABASE_URL                         # Azure PostgreSQL
 ANGELONE_API_KEY                     # Angel One credentials
@@ -163,7 +173,7 @@ ANGELONE_TOTP_TOKEN
 ✅ **841,288 records** in database  
 ✅ **Latest: Nov 26, 2025** at 9:59 AM  
 ✅ **Cron active** - Next run scheduled  
-✅ **Zero errors** - All systems operational  
+✅ **Zero errors** - All systems operational
 
 ## 🎉 You're All Set!
 
