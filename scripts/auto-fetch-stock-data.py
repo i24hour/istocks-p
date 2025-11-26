@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Auto-fetch stock data from Angel One and save to PostgreSQL
-Runs daily after market close to fetch latest data
+Runs during market hours to fetch latest data
+Updated for Azure PostgreSQL
 """
 
 import requests
@@ -15,17 +16,28 @@ import time
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from project root
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_path = os.path.join(project_root, '.env.local')
+load_dotenv(env_path)
 
-# Angel One credentials
-API_KEY = "836MHyks"
-CLIENT_ID = "P60613196"
-SECRET_KEY = "1844"
-TOTP_TOKEN = "774ISS7A3URGKAG5MN5H2Z4OVE"
+# Angel One credentials from environment
+API_KEY = os.getenv("ANGELONE_API_KEY", "836MHyks")
+CLIENT_ID = os.getenv("ANGELONE_CLIENT_ID", "P60613196")
+SECRET_KEY = os.getenv("ANGELONE_SECRET_KEY", "1844")
+TOTP_TOKEN = os.getenv("ANGELONE_TOTP_TOKEN", "774ISS7A3URGKAG5MN5H2Z4OVE")
 
-# Database connection
-DATABASE_URL = "postgresql://priyanshu@localhost:5432/stock_analysis"
+# Database connection from environment (Azure PostgreSQL)
+# Extract connection details from DATABASE_URL
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# If DATABASE_URL contains URL-encoded password, parse it properly
+if not DATABASE_URL:
+    DATABASE_URL = "postgresql://istocks:priyanshu%40123@istocks.postgres.database.azure.com:5432/stock_analysis?sslmode=require&connect_timeout=10"
+else:
+    # URL-encode the @ symbol in password if not already encoded
+    if "priyanshu@123" in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("priyanshu@123", "priyanshu%40123")
 
 # Stock configuration
 STOCK_NAME = "WIPRO"

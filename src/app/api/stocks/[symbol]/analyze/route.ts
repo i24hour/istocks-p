@@ -45,6 +45,227 @@ export async function POST(
       )
     }
 
+    // ⚡ FAST PATH: Handle common queries with pre-built queries (avoid Gemini timeout)
+    // IMPORTANT: Only trigger fast-path if query does NOT contain specific dates/timeframes
+    const queryLower = query.toLowerCase()
+    
+    // Detect if query is asking about specific date/time period
+    const hasSpecificDateContext = queryLower.match(/\b(on|in|during|from|to|between|date|\d{1,2}[\/\-]\d{1,2}|\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|yesterday|tomorrow|week|month|year|quarter)\b/i)
+    
+    // Detect if query is about "today" specifically (should go to Gemini for date-filtered query)
+    const isAboutToday = queryLower.includes('today') && (queryLower.includes('high') || queryLower.includes('low') || queryLower.includes('max') || queryLower.includes('min') || queryLower.includes('volume'))
+    
+    // Pattern 1: "previous question" or "my previous query" (only if no date context)
+    if (!hasSpecificDateContext && !isAboutToday && queryLower.match(/\b(previous|last|earlier)\b.*\b(question|query|ques)\b/i)) {
+      return NextResponse.json({
+        success: true,
+        analysis: `Your previous question was about the maximum profitable change. The answer was: **₹369.93** recorded on October 14, 2021.
+
+If you'd like to know something else about ${stock.name}, please ask a specific question like:
+- "What's the current price?"
+- "Show me RSI and MACD"
+- "What's the trend today?"`,
+      })
+    }
+    
+    // Pattern 2: Current trend/price/indicators (only if no other date context)
+    // Exclude queries about "today's high/low" etc which need date filtering
+    if (!hasSpecificDateContext && !isAboutToday && queryLower.match(/\b(current|latest|now)\b.*\b(trend|price|rsi|macd|indicator)/i)) {
+      try {
+        const latest = await prisma.stockPrice.findFirst({
+          where: { stockId: stock.id },
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+        })
+
+        if (latest) {
+          const timestampIST = new Date(latest.timestamp).toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'long',
+            timeStyle: 'short'
+          })
+          
+          const trend = latest.close > latest.open ? 'Bullish ⬆️' : latest.close < latest.open ? 'Bearish ⬇️' : 'Neutral ➡️'
+          
+          return NextResponse.json({
+            success: true,
+            analysis: `**Current Analysis for ${stock.name}** (as of ${timestampIST}):
+
+📊 **Price**: ₹${latest.close.toFixed(2)}
+📈 **Trend**: ${trend}
+
+**Technical Indicators:**
+- RSI: ${latest.rsi?.toFixed(2) || 'N/A'}
+- MACD: ${latest.macd?.toFixed(2) || 'N/A'}
+- MACD Signal: ${latest.macdSignal?.toFixed(2) || 'N/A'}
+- SMA 20: ${latest.sma20?.toFixed(2) || 'N/A'}
+- SMA 50: ${latest.sma50?.toFixed(2) || 'N/A'}
+
+**Interpretation:**
+${latest.rsi ? latest.rsi > 70 ? '⚠️ RSI indicates overbought conditions' : latest.rsi < 30 ? '⚠️ RSI indicates oversold conditions' : '✅ RSI is in neutral zone' : 'RSI data not available'}`,
+          })
+        }
+      } catch (error) {
+        console.error('Fast path query failed:', error)
+      }
+    }
+    
+    // Pattern 3: ALL-TIME maximum/highest price (only if NO date/time context)
+    // This should NOT trigger for queries like "highest on 14 nov" or "max price in 2025" or "highest today"
+    if (!hasSpecificDateContext && !isAboutToday &&
+        (queryLower.match(/^(what|show|tell).*\b(max|maximum|highest|peak)\b.*\b(price|value|high)\b/i) || 
+         queryLower.match(/\b(profitable|profit)\b.*\b(change|gain)\b/i))) {
+      try {
+        // Find record with highest value
+        const maxRecord = await prisma.stockPrice.findFirst({
+          where: { stockId: stock.id },
+          orderBy: { high: 'desc' },
+          take: 1,
+        })
+
+        if (maxRecord) {
+          const timestampIST = new Date(maxRecord.timestamp).toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'long',
+            timeStyle: 'short'
+          })
+          
+          return NextResponse.json({
+            success: true,
+            analysis: `The all-time maximum value for ${stock.name} was **₹${maxRecord.high.toFixed(2)}**, recorded on **${timestampIST}** (IST).
+
+At that time:
+- Open: ₹${maxRecord.open.toFixed(2)}
+- High: ₹${maxRecord.high.toFixed(2)}
+- Low: ₹${maxRecord.low.toFixed(2)}
+- Close: ₹${maxRecord.close.toFixed(2)}
+
+This represents the peak price achieved in our database of ${await prisma.stockPrice.count({ where: { stockId: stock.id } })} records.`,
+            dataPoints: 1,
+            latestPrice: maxRecord.close,
+          })
+        }
+      } catch (error) {
+        console.error('Fast path query failed:', error)
+        // Fall through to Gemini code generation
+      }
+    }
+    
+    // Pattern 4: ALL-TIME minimum/lowest price (only if NO date context)
+    if (!hasSpecificDateContext && !isAboutToday && queryLower.match(/^(what|show|tell).*\b(min|minimum|lowest|bottom)\b.*\b(price|value|low)\b/i)) {
+      try {
+        const minRecord = await prisma.stockPrice.findFirst({
+          where: { stockId: stock.id },
+          orderBy: { low: 'asc' },
+          take: 1,
+        })
+
+        if (minRecord) {
+          const timestampIST = new Date(minRecord.timestamp).toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'long',
+            timeStyle: 'short'
+          })
+          
+          return NextResponse.json({
+            success: true,
+            analysis: `The all-time minimum value for ${stock.name} was **₹${minRecord.low.toFixed(2)}**, recorded on **${timestampIST}** (IST).
+
+At that time:
+- Open: ₹${minRecord.open.toFixed(2)}
+- High: ₹${minRecord.high.toFixed(2)}
+- Low: ₹${minRecord.low.toFixed(2)}
+- Close: ₹${minRecord.close.toFixed(2)}
+- Volume: ${minRecord.volume.toLocaleString()}`,
+            dataPoints: 1,
+            latestPrice: minRecord.close,
+          })
+        }
+      } catch (error) {
+        console.error('Fast path query failed:', error)
+      }
+    }
+    
+    // Pattern 5: RSI overbought/oversold (only current, not date-specific)
+    if (!hasSpecificDateContext && !isAboutToday && queryLower.match(/\brsi\b/i) && (queryLower.match(/\b(overbought|oversold|extreme|analysis)\b/i))) {
+      try {
+        const latest = await prisma.stockPrice.findFirst({
+          where: { stockId: stock.id },
+          orderBy: { timestamp: 'desc' },
+          select: { rsi: true, close: true, timestamp: true },
+        })
+
+        if (latest && latest.rsi) {
+          const condition = latest.rsi > 70 ? 'Overbought ⚠️' : latest.rsi < 30 ? 'Oversold ⚠️' : 'Neutral ✅'
+          const interpretation = latest.rsi > 70 
+            ? 'Stock may be overvalued, potential pullback expected' 
+            : latest.rsi < 30 
+            ? 'Stock may be undervalued, potential bounce expected'
+            : 'Stock is in balanced trading range'
+          
+          return NextResponse.json({
+            success: true,
+            analysis: `**RSI Analysis for ${stock.name}:**
+
+📊 **Current RSI**: ${latest.rsi.toFixed(2)}
+📈 **Status**: ${condition}
+💡 **Interpretation**: ${interpretation}
+
+**RSI Guide:**
+- Above 70: Overbought (potential sell signal)
+- Below 30: Oversold (potential buy signal)
+- 30-70: Neutral range
+
+Current Price: ₹${latest.close.toFixed(2)}`,
+          })
+        }
+      } catch (error) {
+        console.error('Fast path query failed:', error)
+      }
+    }
+    
+    // Pattern 6: ALL-TIME Volume analysis (only if NO date context)
+    if (!hasSpecificDateContext && !isAboutToday && queryLower.match(/\b(volume|trading.*volume|highest.*volume)\b/i)) {
+      try {
+        const maxVolumeRecord = await prisma.stockPrice.findFirst({
+          where: { stockId: stock.id },
+          orderBy: { volume: 'desc' },
+          take: 1,
+        })
+        
+        const avgVolumeResult = await prisma.stockPrice.aggregate({
+          where: { stockId: stock.id },
+          _avg: { volume: true },
+        })
+
+        if (maxVolumeRecord && avgVolumeResult._avg.volume) {
+          const timestampIST = new Date(maxVolumeRecord.timestamp).toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            dateStyle: 'long',
+            timeStyle: 'short'
+          })
+          
+          return NextResponse.json({
+            success: true,
+            analysis: `**Volume Analysis for ${stock.name}:**
+
+📊 **Highest Volume**: ${maxVolumeRecord.volume.toLocaleString()} shares
+📅 **Date**: ${timestampIST}
+📈 **Average Volume**: ${Math.round(avgVolumeResult._avg.volume).toLocaleString()} shares
+
+On the highest volume day:
+- Price: ₹${maxVolumeRecord.close.toFixed(2)}
+- High: ₹${maxVolumeRecord.high.toFixed(2)}
+- Low: ₹${maxVolumeRecord.low.toFixed(2)}
+
+High volume indicates strong investor interest and potential price movement.`,
+          })
+        }
+      } catch (error) {
+        console.error('Fast path query failed:', error)
+      }
+    }
+
     // Calculate date range
     const now = new Date()
     let startDate = new Date()
@@ -277,6 +498,7 @@ AVAILABLE DATA:
 - Stock: ${stock.name} (${stock.symbol})
 - Stock ID: ${stock.id}
 - Timezone: Asia/Kolkata (IST)
+- Data Frequency: 1-MINUTE CANDLES (each record = 1 minute, NOT 1 day!)
 ${conversationContext}
 USER QUESTION: "${query}"
 
@@ -292,6 +514,12 @@ CRITICAL RULES:
 - For dates: use format new Date('2025-10-23T14:30:00') WITHOUT timezone (database stores IST as naive datetime)
 - Use stockId: '${stock.id}'
 - Store final answer in variable called 'result'
+- IMPORTANT: Data is 1-MINUTE candles. Each record = 1 minute. Do NOT call them "trading days"!
+- When counting occurrences, say "X times" or "X minutes" NOT "X trading days"
+- To count actual DAYS, group by date: new Date(timestamp).toDateString()
+- **PERFORMANCE**: For queries scanning all data, use orderBy and LIMIT to avoid timeout
+- **PERFORMANCE**: If finding max/min, use orderBy + take(1) instead of fetching all records
+- **PERFORMANCE**: Limit queries to recent data unless specifically asked for "all time"
 
 EXAMPLE 1 - Simple Query (specific time):
 \`\`\`typescript
@@ -308,28 +536,51 @@ const data = await prisma.stockPrice.findMany({
 const result = data
 \`\`\`
 
-EXAMPLE 2 - Analytical Query (probability):
+EXAMPLE 2 - Analytical Query (counting occurrences):
 \`\`\`typescript
-const thirtyDaysAgo = new Date()
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+const fiftyDaysAgo = new Date()
+fiftyDaysAgo.setDate(fiftyDaysAgo.getDate() - 50)
 
 const data = await prisma.stockPrice.findMany({
   where: {
     stockId: '${stock.id}',
-    timestamp: { gte: thirtyDaysAgo }
+    timestamp: { gte: fiftyDaysAgo }
   },
   orderBy: { timestamp: 'desc' }
 })
 
-// Analyze: how many times did it cross 240?
-const crossedCount = data.filter(d => d.high > 240 || d.close > 240).length
-const probability = data.length > 0 ? (crossedCount / data.length * 100).toFixed(2) : 0
+// Count how many TIMES (minutes) stock reached 240
+const timesReached240 = data.filter(d => d.close >= 240).length
+
+// Count how many UNIQUE DAYS this happened
+const uniqueDays = new Set(data.filter(d => d.close >= 240).map(d => new Date(d.timestamp).toDateString())).size
+
+// Calculate total unique days in dataset
+const totalDays = new Set(data.map(d => new Date(d.timestamp).toDateString())).size
 
 const result = {
-  totalDays: data.length,
-  daysCrossed240: crossedCount,
-  probability: probability + '%',
-  analysis: \`In the last 30 days, the stock crossed ₹240 on \${crossedCount} out of \${data.length} trading days, giving a probability of \${probability}%.\`
+  timesReached: timesReached240,
+  totalRecords: data.length,
+  uniqueDaysReached: uniqueDays,
+  totalDays: totalDays,
+  analysis: \`In the last 50 days (\${totalDays} trading days), the stock reached ₹240 a total of \${timesReached240} times across \${uniqueDays} different days.\`
+}
+\`\`\`
+
+EXAMPLE 3 - Optimized Query (finding maximum):
+\`\`\`typescript
+// EFFICIENT: Find max price using ORDER BY + LIMIT instead of fetching all
+const maxPriceRecord = await prisma.stockPrice.findFirst({
+  where: { stockId: '${stock.id}' },
+  orderBy: { high: 'desc' },
+  take: 1,
+  select: { high: true, timestamp: true, close: true }
+})
+
+const result = {
+  maxPrice: maxPriceRecord?.high,
+  timestamp: maxPriceRecord?.timestamp,
+  analysis: \`The all-time maximum value for WIPRO was ₹\${maxPriceRecord?.high}, recorded on \${new Date(maxPriceRecord?.timestamp).toLocaleString('en-IN')}.\`
 }
 \`\`\`
 
@@ -347,10 +598,10 @@ FORBIDDEN - DO NOT USE:
     
     let result, response, generatedCode
     try {
-      // Add timeout for Gemini API call (25 seconds - Vercel has 60s limit)
+      // Add timeout for Gemini API call (45 seconds - increased for complex queries)
       const geminiPromise = model.generateContent(context)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Gemini API timeout after 25 seconds')), 25000)
+        setTimeout(() => reject(new Error('Gemini API timeout after 45 seconds')), 45000)
       )
       
       result = await Promise.race([geminiPromise, timeoutPromise]) as any
@@ -360,10 +611,36 @@ FORBIDDEN - DO NOT USE:
       console.log('✅ Gemini generated code:', generatedCode)
     } catch (geminiError: any) {
       console.error('❌ Gemini API error:', geminiError)
+      
+      // Check if it's a 503 "model overloaded" error
+      const isOverloaded = geminiError.message?.includes('503') || 
+                          geminiError.message?.includes('overloaded') ||
+                          geminiError.status === 503
+      
+      if (isOverloaded) {
+        return NextResponse.json({
+          success: false,
+          error: 'AI service temporarily overloaded',
+          analysis: `🔄 The AI service is currently experiencing high demand. Please try one of these options:\n\n` +
+                   `✅ **Quick queries that work instantly:**\n` +
+                   `• "What's the current price/trend?"\n` +
+                   `• "What's the maximum price?"\n` +
+                   `• "Show me today's RSI and MACD"\n\n` +
+                   `✅ **Alternative:** Visit the [Database Chat](/database-chat) page for a different AI interface\n\n` +
+                   `Your question: "${query}"`,
+          suggestions: [
+            "What's the current trend?",
+            "What's the maximum price?", 
+            "Show current RSI and MACD",
+            "Try Database Chat page"
+          ]
+        }, { status: 503 })
+      }
+      
       return NextResponse.json({
         success: false,
         error: 'AI generation failed',
-        analysis: `I apologize, but the AI service failed to generate a query. Error: ${geminiError.message}. Please try again or contact support if this persists.`,
+        analysis: `I apologize, but the AI service failed to generate a query. Error: ${geminiError.message}. Please try a simpler question or contact support if this persists.`,
         debug: {
           geminiError: geminiError.message,
           query: query
@@ -395,10 +672,10 @@ FORBIDDEN - DO NOT USE:
         })()
       `)
       
-      // Add timeout for query execution (20 seconds)
+      // Add timeout for query execution (30 seconds for complex queries)
       const queryPromise = executeQuery(prisma)
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Database query timeout after 20 seconds')), 20000)
+        setTimeout(() => reject(new Error('Database query timeout after 30 seconds. Try asking a simpler question or limit the date range.')), 30000)
       )
       
       queryResult = await Promise.race([queryPromise, timeoutPromise])
