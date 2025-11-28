@@ -1,10 +1,57 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+
+interface StockData {
+  symbol: string
+  name: string
+  exchange: string
+  latestPrice: number | null
+  change: number | null
+  changePercent: number | null
+  volume: number | null
+}
 
 export default function HomePage() {
   const router = useRouter()
+  const [stocks, setStocks] = useState<StockData[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchStocks()
+  }, [])
+
+  const fetchStocks = async () => {
+    try {
+      const response = await fetch('/api/stocks')
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        setStocks(result.data)
+      }
+    } catch (error) {
+      console.error('Error fetching stocks:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Get first letter of stock name for icon
+  const getStockInitial = (name: string) => {
+    return name.charAt(0).toUpperCase()
+  }
+
+  // Generate gradient colors based on stock symbol
+  const getGradientColors = (symbol: string) => {
+    const gradients = {
+      'WIPRO': 'from-blue-500 to-purple-600',
+      'VEDL': 'from-orange-500 to-red-600',
+      'ADANIPOWER': 'from-green-500 to-teal-600',
+    }
+    return gradients[symbol as keyof typeof gradients] || 'from-blue-500 to-purple-600'
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -19,7 +66,7 @@ export default function HomePage() {
           </div>
           <nav className="flex gap-6">
             <button className="text-gray-700 hover:text-gray-900 font-medium">Stocks</button>
-            <button 
+            <button
               onClick={() => router.push('/database-chat')}
               className="text-gray-500 hover:text-gray-700 flex items-center gap-1"
             >
@@ -55,47 +102,59 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Stock Card */}
-        <div className="max-w-2xl mx-auto">
-          <div
-            onClick={() => router.push('/stock/WIPRO')}
-            className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer p-6 border border-gray-200"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-xl">W</span>
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Wipro</h2>
-                  <p className="text-gray-500">NSE: WIPRO</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-gray-900">₹244.37</div>
-                <div className="text-danger flex items-center justify-end gap-1">
-                  <span>-0.98 (-0.39%)</span>
-                  <span className="text-xs">1D</span>
-                </div>
-              </div>
+        {/* Stock Cards */}
+        <div className="max-w-4xl mx-auto mb-16">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <div className="flex items-center justify-between text-sm">
-                <div>
-                  <span className="text-gray-500">Market Cap</span>
-                  <div className="font-semibold text-gray-900">₹1.32T</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {stocks.map((stock) => (
+                <div
+                  key={stock.symbol}
+                  onClick={() => router.push(`/stock/${stock.symbol}`)}
+                  className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer p-6 border border-gray-200"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-12 h-12 bg-gradient-to-br ${getGradientColors(stock.symbol)} rounded-lg flex items-center justify-center`}>
+                        <span className="text-white font-bold text-lg">{getStockInitial(stock.name)}</span>
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold text-gray-900">{stock.name}</h2>
+                        <p className="text-sm text-gray-500">{stock.exchange}: {stock.symbol}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {stock.latestPrice !== null ? (
+                    <>
+                      <div className="mb-3">
+                        <div className="text-2xl font-bold text-gray-900">₹{stock.latestPrice.toFixed(2)}</div>
+                        {stock.change !== null && stock.changePercent !== null && (
+                          <div className={`flex items-center gap-1 text-sm ${stock.change < 0 ? 'text-danger' : 'text-success'}`}>
+                            {stock.change < 0 ? <TrendingDown className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
+                            <span className="font-semibold">
+                              {stock.change > 0 ? '+' : ''}{stock.change.toFixed(2)} ({stock.changePercent.toFixed(2)}%)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {stock.volume && (
+                        <div className="text-xs text-gray-500">
+                          Vol: {(stock.volume / 1000000).toFixed(2)}M
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-gray-500">Loading price data...</div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-gray-500">Volume</span>
-                  <div className="font-semibold text-gray-900">45.2M</div>
-                </div>
-                <div>
-                  <span className="text-gray-500">P/E Ratio</span>
-                  <div className="font-semibold text-gray-900">24.5</div>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Features */}

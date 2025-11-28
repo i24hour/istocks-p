@@ -577,17 +577,33 @@ const maxPriceRecord = await prisma.stockPrice.findFirst({
   select: { high: true, timestamp: true, close: true }
 })
 
-const result = {
-  maxPrice: maxPriceRecord?.high,
-  timestamp: maxPriceRecord?.timestamp,
-  analysis: \`The all-time maximum value for WIPRO was ₹\${maxPriceRecord?.high}, recorded on \${new Date(maxPriceRecord?.timestamp).toLocaleString('en-IN')}.\`
+// IMPORTANT: Always check if record exists before accessing properties
+if (!maxPriceRecord) {
+  const result = {
+    analysis: "No data found for this query. Please try a different time period."
+  }
+} else {
+  const result = {
+    maxPrice: maxPriceRecord.high,
+    timestamp: maxPriceRecord.timestamp,
+    analysis: \`The all-time maximum value for WIPRO was ₹\${maxPriceRecord.high.toFixed(2)}, recorded on \${new Date(maxPriceRecord.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}.\`
+  }
 }
 \`\`\`
+
+CRITICAL RULES:
+1. ALWAYS check if records exist before accessing properties (use if (!record) return...)
+2. ALWAYS use optional chaining (?.) when accessing nested properties
+3. ALWAYS use .toFixed(2) for price values before string interpolation
+4. ALWAYS wrap Date objects in 'new Date()' before calling toLocaleString()
+5. The LAST statement MUST be 'const result = {...}' or just 'result = {...}'
+6. Do NOT use 'return result' - the result variable is automatically returned
 
 FORBIDDEN - DO NOT USE:
 - import statements
 - require()
 - external modules
+- return statements (result is auto-returned)
 - anything except Prisma queries and basic JavaScript
 `
 
@@ -684,10 +700,19 @@ FORBIDDEN - DO NOT USE:
       console.error('❌ Error executing generated code:', execError)
       console.error('❌ Error stack:', execError.stack)
       console.error('❌ Generated code was:', prismaCode)
+      
+      // Provide helpful error message based on error type
+      let helpfulMessage = execError.message
+      if (execError.message.includes('toLocaleString') || execError.message.includes('undefined')) {
+        helpfulMessage = "The query returned no data for your request. Try asking about a different time period or check if data exists for the date you specified."
+      } else if (execError.message.includes('timeout')) {
+        helpfulMessage = "Your query is taking too long. Try asking about a shorter time period or a simpler question."
+      }
+      
       return NextResponse.json({
         success: false,
         error: 'Failed to execute query',
-        analysis: `I apologize, but the generated query failed to execute: ${execError.message}\n\nError details: ${execError.stack || 'No stack trace'}`,
+        analysis: `I apologize, but I encountered an issue: ${helpfulMessage}\n\n**Suggestions:**\n- Try a different time period\n- Ask a simpler question\n- Check if data exists for your query\n\nTechnical details: ${execError.message}`,
         debug: {
           errorMessage: execError.message,
           errorStack: execError.stack,

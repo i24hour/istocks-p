@@ -38,7 +38,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           where: { symbol: params.symbol }
         })
         if (!stock) return null
-        
+
         return await prisma.stockPrice.findMany({
           where: { stockId: stock.id },
           orderBy: { timestamp: 'desc' },
@@ -50,7 +50,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           where: { symbol: params.symbol }
         })
         if (!stockForRange) return null
-        
+
         return await prisma.stockPrice.findMany({
           where: {
             stockId: stockForRange.id,
@@ -67,7 +67,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           where: { symbol: params.symbol }
         })
         if (!stockForInsights) return null
-        
+
         return await prisma.stockInsight.findMany({
           where: { stockId: stockForInsights.id },
           orderBy: { generatedAt: 'desc' },
@@ -98,7 +98,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
             }
           }
         })
-        
+
         // Calculate percentage change and sort
         const stocksWithChange = allStocks
           .filter(s => s.priceData.length >= 2)
@@ -116,7 +116,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           })
           .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
           .slice(0, params.limit || 10)
-        
+
         return stocksWithChange
 
       case 'getVolumeAnalysis':
@@ -124,7 +124,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           where: { symbol: params.symbol }
         })
         if (!stockForVolume) return null
-        
+
         const volumeData = await prisma.stockPrice.findMany({
           where: { stockId: stockForVolume.id },
           orderBy: { timestamp: 'desc' },
@@ -135,7 +135,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
             close: true,
           }
         })
-        
+
         return volumeData
 
       case 'getTechnicalIndicators':
@@ -143,7 +143,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           where: { symbol: params.symbol }
         })
         if (!stockForIndicators) return null
-        
+
         return await prisma.stockPrice.findFirst({
           where: { stockId: stockForIndicators.id },
           orderBy: { timestamp: 'desc' },
@@ -183,11 +183,27 @@ async function executeDatabaseQuery(queryType: string, params: any) {
           where: { symbol: params.symbol }
         })
         if (!stockForTime) return { error: 'Stock not found' }
-        
-        // Parse the requested time
-        const requestedTime = new Date(params.timestamp)
-        
-        // Find the closest price record to the requested time
+
+        // Parse the requested time - if no year specified, use current year
+        let requestedTime: Date
+        try {
+          requestedTime = new Date(params.timestamp)
+
+          // If date is invalid or timestamp doesn't include year, try to infer
+          if (isNaN(requestedTime.getTime())) {
+            // Try parsing with current year
+            const now = new Date()
+            const yearPrefix = now.getFullYear()
+            requestedTime = new Date(`${yearPrefix}-${params.timestamp}`)
+          }
+
+        } catch (e) {
+          return { error: `Invalid timestamp format: ${params.timestamp}` }
+        }
+
+        console.log(`🔍 getPriceAtTime: Looking for ${params.symbol} at ${requestedTime.toISOString()}`)
+
+        // Find the closest price record to the requested time (within 5 minutes)
         const priceRecord = await prisma.stockPrice.findFirst({
           where: {
             stockId: stockForTime.id,
@@ -197,12 +213,12 @@ async function executeDatabaseQuery(queryType: string, params: any) {
             }
           },
           orderBy: {
-            timestamp: 'desc'
+            timestamp: 'asc'
           }
         })
-        
+
         if (!priceRecord) {
-          // Get the closest available data
+          // Get the closest available data before and after
           const closestBefore = await prisma.stockPrice.findFirst({
             where: {
               stockId: stockForTime.id,
@@ -210,7 +226,7 @@ async function executeDatabaseQuery(queryType: string, params: any) {
             },
             orderBy: { timestamp: 'desc' }
           })
-          
+
           const closestAfter = await prisma.stockPrice.findFirst({
             where: {
               stockId: stockForTime.id,
@@ -218,21 +234,54 @@ async function executeDatabaseQuery(queryType: string, params: any) {
             },
             orderBy: { timestamp: 'asc' }
           })
-          
+
+          // Provide helpful context
+          const dateStr = requestedTime.toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+
+          if (!closestBefore && !closestAfter) {
+            return {
+              requestedTime: params.timestamp,
+              parsedTime: requestedTime.toISOString(),
+              exactMatch: false,
+              message: `No data found for ${params.symbol} around ${dateStr}. The database might not have data for this time period.`,
+              closestBefore: null,
+              closestAfter: null
+            }
+          }
+
           return {
             requestedTime: params.timestamp,
+            parsedTime: requestedTime.toISOString(),
             exactMatch: false,
-            message: 'No exact match found. Showing closest available data.',
-            closestBefore,
-            closestAfter
+            message: `No exact match at ${dateStr}. Showing nearest available data.`,
+            closestBefore: closestBefore ? {
+              ...closestBefore,
+              volume: closestBefore.volume.toString()
+            } : null,
+            closestAfter: closestAfter ? {
+              ...closestAfter,
+              volume: closestAfter.volume.toString()
+            } : null
           }
         }
-        
+
         return {
           requestedTime: params.timestamp,
+          parsedTime: requestedTime.toISOString(),
           exactMatch: true,
-          data: priceRecord
+          message: `Found data for ${params.symbol} at ${requestedTime.toLocaleString('en-IN')}`,
+          data: {
+            ...priceRecord,
+            volume: priceRecord.volume.toString()
+          }
         }
+
 
       default:
         return null
@@ -347,12 +396,12 @@ const databaseFunctions = [
   },
   {
     name: 'getPriceAtTime',
-    description: 'Get stock price at a specific date and time. Use this when user asks about price at a specific time.',
+    description: 'Get stock price at a specific date and time. Use this when user asks about price at a specific time. IMPORTANT: If user mentions a recent date without year (e.g. "14 Nov"), use 2024 as the year, not 2025.',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
         symbol: { type: SchemaType.STRING, description: 'Stock symbol' },
-        timestamp: { type: SchemaType.STRING, description: 'Timestamp in ISO format (e.g., 2025-11-14T14:30:00)' },
+        timestamp: { type: SchemaType.STRING, description: 'Timestamp in ISO format. Examples: "2024-11-14T13:50:00" for 14 Nov 2024 1:50 PM, "2024-01-15T10:00:00" for 15 Jan 2024 10:00 AM. Current year is 2025, but historical data is from 2024 and earlier.' },
       },
       required: ['symbol', 'timestamp'],
     },
@@ -410,9 +459,10 @@ CRITICAL RULES - YOU MUST FOLLOW THESE:
 3. ONLY provide information that comes from database query results
 4. If you don't have data, say "I don't have data for that" - DO NOT make assumptions
 5. When user asks about specific times/dates, use getPriceAtTime function
-6. ALWAYS call the appropriate database function before answering
-7. Base your entire response ONLY on the data returned from database functions
-8. Use conversation context to understand follow-up questions
+6. IMPORTANT: Current date is ${new Date().toISOString().split('T')[0]} (2025). When users ask about recent dates like "14 Nov" without year, they likely mean 2024, NOT 2025! Historical stock data is from 2016-2024. Always use 2024 for recent historical queries.
+7. ALWAYS call the appropriate database function before answering
+8. Base your entire response ONLY on the data returned from database functions
+9. Use conversation context to understand follow-up questions
 
 DATABASE SCHEMA:
 - Stock: Contains stock information (id, symbol, name, exchange)
@@ -461,9 +511,9 @@ User's question: ${message}`
 
       // Execute the database query
       const queryResult = await executeDatabaseQuery(functionName, functionArgs)
-      
+
       console.log('📊 Query result:', JSON.stringify(queryResult, null, 2))
-      
+
       functionCalls.push({
         name: functionName,
         args: functionArgs,
