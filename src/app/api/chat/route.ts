@@ -396,12 +396,12 @@ const databaseFunctions = [
   },
   {
     name: 'getPriceAtTime',
-    description: 'Get stock price at a specific date and time. Use this when user asks about price at a specific time. IMPORTANT: If user mentions a recent date without year (e.g. "14 Nov"), use 2024 as the year, not 2025.',
+    description: 'Get stock price at a specific date and time. Use this ONLY when you have the COMPLETE date including year. Database has data from Oct 2016 to Nov 2025. If user gives incomplete date (e.g. "14 Nov"), ask which year before calling this function.',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
         symbol: { type: SchemaType.STRING, description: 'Stock symbol' },
-        timestamp: { type: SchemaType.STRING, description: 'Timestamp in ISO format. Examples: "2024-11-14T13:50:00" for 14 Nov 2024 1:50 PM, "2024-01-15T10:00:00" for 15 Jan 2024 10:00 AM. Current year is 2025, but historical data is from 2024 and earlier.' },
+        timestamp: { type: SchemaType.STRING, description: 'Complete timestamp in ISO format. Examples: "2024-11-14T13:50:00" for 14 Nov 2024 1:50 PM, "2025-11-14T13:50:00" for 14 Nov 2025 1:50 PM.' },
       },
       required: ['symbol', 'timestamp'],
     },
@@ -458,11 +458,12 @@ CRITICAL RULES - YOU MUST FOLLOW THESE:
 2. ALWAYS use database functions to get actual data
 3. ONLY provide information that comes from database query results
 4. If you don't have data, say "I don't have data for that" - DO NOT make assumptions
-5. When user asks about specific times/dates, use getPriceAtTime function
-6. IMPORTANT: Current date is ${new Date().toISOString().split('T')[0]} (2025). When users ask about recent dates like "14 Nov" without year, they likely mean 2024, NOT 2025! Historical stock data is from 2016-2024. Always use 2024 for recent historical queries.
-7. ALWAYS call the appropriate database function before answering
-8. Base your entire response ONLY on the data returned from database functions
-9. Use conversation context to understand follow-up questions
+5. When user asks about specific times/dates WITHOUT specifying the year, ASK them which year they mean before making the query
+6. **IMPORTANT**: Database has stock data from October 2016 to November 2025. When user says "14 Nov" or similar without year, respond with: "I found data for both 14 Nov 2024 and 14 Nov 2025. Which year would you like to know about?" Then wait for their response.
+7. ONLY use getPriceAtTime function AFTER you know the complete date including year
+8. ALWAYS call the appropriate database function before answering
+9. Base your entire response ONLY on the data returned from database functions
+10. Use conversation context to understand follow-up questions
 
 DATABASE SCHEMA:
 - Stock: Contains stock information (id, symbol, name, exchange)
@@ -479,17 +480,24 @@ ${databaseFunctions.map(f => `- ${f.name}: ${f.description}`).join('\n')}
 
 WORKFLOW:
 1. Read the user's question carefully
-2. Identify which database function(s) to call
-3. Call the function(s) to get actual data
-4. Wait for the database results
-5. ONLY use the returned data in your response
-6. If data is missing, clearly state that
+2. If date/time is ambiguous (missing year), ASK for clarification BEFORE calling any functions
+3. Once you have complete information, identify which database function(s) to call
+4. Call the function(s) to get actual data
+5. Wait for the database results
+6. ONLY use the returned data in your response
+7. If data is missing, clearly state that
 
-EXAMPLE:
-User: "What was WIPRO's price at 2:30 PM on November 14th?"
-You MUST: Call getPriceAtTime with symbol="WIPRO" and timestamp="2025-11-14T14:30:00"
+EXAMPLES:
+
+Example 1 - INCOMPLETE DATE (ask for clarification):
+User: "What was ADANIPOWER's price on 14 Nov at 1:50 PM?"
+You MUST respond: "I can help with that! The database has data from 2016 to 2025. Did you mean 14 November 2024 or 14 November 2025?"
+DO NOT call getPriceAtTime yet - wait for user to specify the year
+
+Example 2 - COMPLETE DATE (proceed with query):
+User: "What was WIPRO's price on November 14, 2024 at 2:30 PM?"
+You MUST: Call getPriceAtTime with symbol="WIPRO" and timestamp="2024-11-14T14:30:00"
 Then: Use ONLY the returned data in your response
-DO NOT: Make up prices or say "data not available" without calling the function first
 
 User's question: ${message}`
 
