@@ -37,3 +37,10 @@ next-env.d.ts
 # prisma
 prisma/migrations
 azure-publish-profile.xml
+
+# Database dumps
+*.sql
+*.dump
+*.csv
+*.log
+logs/

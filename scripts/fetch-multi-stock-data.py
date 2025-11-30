@@ -47,6 +47,18 @@ STOCKS_CONFIG = [
         "name": "Wipro Limited",
         "angel_one_name": "WIPRO",
         "exchange": "NSE"
+    },
+    {
+        "symbol": "ADANIPOWER",
+        "name": "Adani Power",
+        "angel_one_name": "ADANIPOWER",
+        "exchange": "NSE"
+    },
+    {
+        "symbol": "VEDL",
+        "name": "Vedanta",
+        "angel_one_name": "VEDL",
+        "exchange": "NSE"
     }
 ]
 
